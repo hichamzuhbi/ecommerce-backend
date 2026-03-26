@@ -1,7 +1,4 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -14,7 +11,10 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  app.enableCors();
+  app.enableCors({
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+  });
   app.useStaticAssets(join(__dirname, '..', 'public'));
 
   app.setGlobalPrefix('api');
@@ -40,10 +40,12 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.PORT || 3000;
-  await app.listen(port);
+  const port = Number(process.env.PORT || 3000);
+  const host = '0.0.0.0';
+  await app.listen(port, host);
 
-  console.log(`Application is running on: http://localhost:${port}`);
-  console.log(`Swagger documentation: http://localhost:${port}/api/docs`);
+  const appUrl = process.env.APP_URL ?? (await app.getUrl());
+  console.log(`Application is running on: ${appUrl}`);
+  console.log(`Swagger documentation: ${appUrl}/api/docs`);
 }
 bootstrap();

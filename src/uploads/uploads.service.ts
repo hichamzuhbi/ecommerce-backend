@@ -3,7 +3,8 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class UploadsService {
   getImageUrl(filename: string): string {
-    return `http://localhost:3000/uploads/${filename}`;
+    const baseUrl = process.env.APP_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
+    return `${baseUrl}/uploads/${filename}`;
   }
 
   buildSingleImageResponse(filename: string): { url: string } {

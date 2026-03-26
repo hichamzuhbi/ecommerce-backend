@@ -15,12 +15,15 @@ import { PaymentsModule } from './payments/payments.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { UploadsModule } from './uploads/uploads.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { validateEnv } from './config/env.validation';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      ignoreEnvFile: process.env.NODE_ENV === 'production',
       envFilePath: '.env',
+      validate: validateEnv,
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

@@ -198,7 +198,11 @@ export class ProductsController {
     const uploadedImages = [
       ...(files?.image ?? []),
       ...(files?.images ?? []),
-    ].map((file) => `http://localhost:3000/uploads/${file.filename}`);
+    ].map((file) => {
+      const baseUrl =
+        process.env.APP_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
+      return `${baseUrl}/uploads/${file.filename}`;
+    });
 
     if (uploadedImages.length > 0) {
       payload.imageUrls = Array.from(
