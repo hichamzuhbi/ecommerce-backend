@@ -6,6 +6,8 @@ export const getDatabaseConfig = (
 ): TypeOrmModuleOptions => {
   const nodeEnv = configService.get<string>('NODE_ENV') ?? 'development';
   const isProduction = nodeEnv === 'production';
+  const dbSyncEnv = configService.get<string>('DB_SYNC');
+  const shouldSynchronize = dbSyncEnv ? dbSyncEnv === 'true' : !isProduction;
   const databaseUrl =
     process.env.DATABASE_POOLER_URL ??
     configService.get<string>('DATABASE_POOLER_URL') ??
@@ -16,7 +18,7 @@ export const getDatabaseConfig = (
     type: 'postgres',
     url: databaseUrl,
     entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-    synchronize: false,
+    synchronize: shouldSynchronize,
     logging: !isProduction,
     connectTimeoutMS: 30000,
     ssl: { rejectUnauthorized: false },
