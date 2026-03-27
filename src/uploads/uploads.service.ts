@@ -6,9 +6,7 @@ export class UploadsService {
     const normalizedFilename = filename.replace(/^\/+/, '');
     const relativePath = `/uploads/${normalizedFilename}`;
 
-    const configuredBaseUrl =
-      process.env.PUBLIC_UPLOADS_BASE_URL?.trim() ||
-      process.env.APP_URL?.trim();
+    const configuredBaseUrl = process.env.APP_URL?.trim();
 
     if (!configuredBaseUrl) {
       return relativePath;

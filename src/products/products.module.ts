@@ -4,10 +4,10 @@ import { ProductsService } from './products.service';
 import { ProductsController } from './products.controller';
 import { Product } from './entities/product.entity';
 import { Category } from '../categories/entities/category.entity';
+import { UploadsModule } from '../uploads/uploads.module';
 
 @Module({
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  imports: [TypeOrmModule.forFeature([Product, Category])],
+  imports: [TypeOrmModule.forFeature([Product, Category]), UploadsModule],
   controllers: [ProductsController],
   providers: [ProductsService],
   exports: [ProductsService],

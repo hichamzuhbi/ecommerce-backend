@@ -35,6 +35,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { multerOptions } from '../uploads/multer.config';
+import { UploadsService } from '../uploads/uploads.service';
 
 interface UploadedImageFile {
   filename: string;
@@ -48,7 +49,10 @@ interface UploadedImageFields {
 @ApiTags('products')
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly uploadsService: UploadsService,
+  ) {}
 
   @Post()
   @ApiBearerAuth()
@@ -198,10 +202,7 @@ export class ProductsController {
     const uploadedImages = [
       ...(files?.image ?? []),
       ...(files?.images ?? []),
-    ].map((file) => {
-      const baseUrl = 'https://ecommerce-backend-1-kxpv.onrender.com/api';
-      return `${baseUrl}/uploads/${file.filename}`;
-    });
+    ].map((file) => this.uploadsService.getImageUrl(file.filename));
 
     if (uploadedImages.length > 0) {
       payload.imageUrls = Array.from(
