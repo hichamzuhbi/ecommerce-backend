@@ -7,7 +7,7 @@ const useSsl = dbSsl ? dbSsl === 'true' : isProduction;
 
 export default new DataSource({
   type: 'postgres',
-  url: process.env.DATABASE_URL,
+  url: process.env.DATABASE_POOLER_URL ?? process.env.DATABASE_URL,
   synchronize: false,
   logging: !isProduction,
   entities: [isProduction ? 'dist/**/*.entity.js' : 'src/**/*.entity.ts'],
