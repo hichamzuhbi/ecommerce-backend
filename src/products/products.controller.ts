@@ -199,8 +199,7 @@ export class ProductsController {
       ...(files?.image ?? []),
       ...(files?.images ?? []),
     ].map((file) => {
-      const baseUrl =
-        process.env.APP_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
+      const baseUrl = 'https://ecommerce-backend-1-kxpv.onrender.com/api';
       return `${baseUrl}/uploads/${file.filename}`;
     });
 
