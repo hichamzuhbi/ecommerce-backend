@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class UploadsService {
   getImageUrl(filename: string): string {
-    const baseUrl = process.env.APP_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
+    const baseUrl = 'https://ecommerce-backend-1-kxpv.onrender.com';
     return `${baseUrl}/uploads/${filename}`;
   }
 
