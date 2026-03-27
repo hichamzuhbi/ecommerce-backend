@@ -3,8 +3,18 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class UploadsService {
   getImageUrl(filename: string): string {
-    const baseUrl = 'https://ecommerce-backend-1-kxpv.onrender.com/api';
-    return `${baseUrl}/uploads/${filename}`;
+    const normalizedFilename = filename.replace(/^\/+/, '');
+    const relativePath = `/uploads/${normalizedFilename}`;
+
+    const configuredBaseUrl =
+      process.env.PUBLIC_UPLOADS_BASE_URL?.trim() ||
+      process.env.APP_URL?.trim();
+
+    if (!configuredBaseUrl) {
+      return relativePath;
+    }
+
+    return `${configuredBaseUrl.replace(/\/+$/, '')}${relativePath}`;
   }
 
   buildSingleImageResponse(filename: string): { url: string } {
