@@ -1,9 +1,9 @@
 import {
   BadRequestException,
   Controller,
+  InternalServerErrorException,
   Post,
   UploadedFile,
-  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -14,16 +14,24 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
-import { multerOptions } from './multer.config';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadsService } from './uploads.service';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
 
-interface UploadedImage {
-  filename: string;
+interface UploadedImageFile {
+  buffer: Buffer;
+  mimetype: string;
+  originalname: string;
 }
+
+const allowedMimeTypes = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+]);
 
 @ApiTags('uploads')
 @ApiBearerAuth()
@@ -48,41 +56,40 @@ export class UploadsController {
       required: ['file'],
     },
   })
-  @UseInterceptors(FileInterceptor('file', multerOptions))
-  uploadImage(@UploadedFile() file: UploadedImage): { url: string } {
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 2 * 1024 * 1024,
+        files: 1,
+      },
+      fileFilter: (_req, file, cb) => {
+        if (!allowedMimeTypes.has(file.mimetype)) {
+          cb(
+            new BadRequestException(
+              'Invalid file type. Only jpg, jpeg, png, and webp are allowed.',
+            ),
+            false,
+          );
+          return;
+        }
+
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadImage(
+    @UploadedFile() file: UploadedImageFile,
+  ): Promise<{ url: string }> {
     if (!file) {
       throw new BadRequestException('Image file is required');
     }
 
-    return this.uploadsService.buildSingleImageResponse(file.filename);
-  }
-
-  @Post('images')
-  @ApiOperation({ summary: 'Upload multiple images (Admin only)' })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        files: {
-          type: 'array',
-          items: {
-            type: 'string',
-            format: 'binary',
-          },
-        },
-      },
-      required: ['files'],
-    },
-  })
-  @UseInterceptors(FilesInterceptor('files', 5, multerOptions))
-  uploadImages(@UploadedFiles() files: UploadedImage[]): { urls: string[] } {
-    if (!files || files.length === 0) {
-      throw new BadRequestException('At least one image file is required');
+    try {
+      return await this.uploadsService.uploadSingleImage(file);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to upload image';
+      throw new InternalServerErrorException(message);
     }
-
-    return this.uploadsService.buildMultipleImagesResponse(
-      files.map((file) => file.filename),
-    );
   }
 }

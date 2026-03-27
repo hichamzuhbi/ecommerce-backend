@@ -3,6 +3,8 @@ type EnvConfig = Record<string, string | undefined>;
 const requiredKeys = [
   'APP_URL',
   'FRONTEND_URL',
+  'SUPABASE_URL',
+  'SUPABASE_KEY',
   'JWT_SECRET',
   'JWT_REFRESH_SECRET',
   'JWT_EXPIRES_IN',

@@ -129,12 +129,17 @@ Swagger documentation: `http://localhost:3000/api/docs`
 ```env
 PORT=3000
 NODE_ENV=development
+APP_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:5173,https://your-frontend.vercel.app
 
 DATABASE_HOST=localhost
 DATABASE_PORT=5432
 DATABASE_NAME=ecommerce_db
 DATABASE_USER=postgres
 DATABASE_PASS=postgres
+
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_KEY=your-supabase-service-role-or-anon-key
 
 JWT_SECRET=your-secret-key
 JWT_REFRESH_SECRET=your-refresh-secret-key

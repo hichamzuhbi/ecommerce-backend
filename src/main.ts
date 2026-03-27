@@ -11,8 +11,25 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  const allowedOrigins = (process.env.FRONTEND_URL ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
   app.enableCors({
-    origin: process.env.FRONTEND_URL,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.length === 0) {
+        callback(null, true);
+        return;
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
   });
   app.useStaticAssets(join(__dirname, '..', 'public'));
