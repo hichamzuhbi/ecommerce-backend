@@ -151,16 +151,19 @@ export class AuthService {
       role: user.role,
     };
 
+    const jwtExpiresIn =
+      this.configService.get<string>('JWT_EXPIRES_IN') || '7d';
+    const jwtRefreshExpiresIn =
+      this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '30d';
+
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.getOrThrow<string>('JWT_SECRET'),
-        expiresIn: this.configService.getOrThrow<string>('JWT_EXPIRES_IN'),
+        expiresIn: jwtExpiresIn as any,
       }),
       this.jwtService.signAsync(payload, {
         secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
-        expiresIn: this.configService.getOrThrow<string>(
-          'JWT_REFRESH_EXPIRES_IN',
-        ),
+        expiresIn: jwtRefreshExpiresIn as any,
       }),
     ]);
 
@@ -178,7 +181,8 @@ export class AuthService {
   }
 
   async registerAdmin(registerAdminDto: RegisterAdminDto) {
-    const adminSecret = this.configService.getOrThrow<string>('ADMIN_SECRET_KEY');
+    const adminSecret =
+      this.configService.getOrThrow<string>('ADMIN_SECRET_KEY');
     if (registerAdminDto.adminSecret !== adminSecret) {
       throw new UnauthorizedException('Invalid admin secret key');
     }
