@@ -10,6 +10,10 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: azure-deployment
+  cancel-in-progress: true
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
