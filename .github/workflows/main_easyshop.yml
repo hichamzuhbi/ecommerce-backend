@@ -21,11 +21,11 @@ jobs:
         with:
           node-version: '20.x'
 
-      # 3️⃣ Install dependencies
+      # 3️⃣ Install dependencies (use npm ci for stability)
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      # 4️⃣ Build project
+      # 4️⃣ Build NestJS project
       - name: Build NestJS project
         run: npm run build
 
@@ -43,4 +43,4 @@ jobs:
         with:
           app-name: 'easyshop'
           slot-name: 'Production'
-          package: .
+          package: ./dist   # فقط مجلد build
