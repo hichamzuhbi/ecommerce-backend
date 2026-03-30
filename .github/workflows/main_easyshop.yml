@@ -45,9 +45,15 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_BB899E4CEF22485DB0A3677CB10C3160 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_CE90D966DD36418EAEF00613E1F732FF }}
 
+      - name: Set Node version on Azure
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az webapp config appsettings set --name easyshop --resource-group ecommerce-rg --settings WEBSITE_NODE_DEFAULT_VERSION="~20"
+
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'easyshop'
           slot-name: 'Production'
-          package: .
+          package: ./dist
