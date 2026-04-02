@@ -15,15 +15,22 @@ async function bootstrap() {
     .split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);
+  const localhostRegex = /^https?:\/\/localhost(?::\d+)?$/i;
+  const vercelPreviewRegex =
+    /^https:\/\/ecommerce-frontend-[a-z0-9-]+-hichamzuhbis-projects\.vercel\.app$/i;
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.length === 0) {
+      if (!origin) {
         callback(null, true);
         return;
       }
 
-      if (allowedOrigins.includes(origin)) {
+      if (
+        allowedOrigins.includes(origin) ||
+        localhostRegex.test(origin) ||
+        vercelPreviewRegex.test(origin)
+      ) {
         callback(null, true);
         return;
       }
