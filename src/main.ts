@@ -16,8 +16,8 @@ async function bootstrap() {
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);
   const localhostRegex = /^https?:\/\/localhost(?::\d+)?$/i;
-  const vercelPreviewRegex =
-    /^https:\/\/ecommerce-frontend-[a-z0-9-]+-hichamzuhbis-projects\.vercel\.app$/i;
+  const azureFrontendRegex =
+    /^https:\/\/shopnow-[a-z0-9-]+\.westeurope-01\.azurewebsites\.net$/i;
 
   app.enableCors({
     origin: (origin, callback) => {
@@ -29,7 +29,7 @@ async function bootstrap() {
       if (
         allowedOrigins.includes(origin) ||
         localhostRegex.test(origin) ||
-        vercelPreviewRegex.test(origin)
+        azureFrontendRegex.test(origin)
       ) {
         callback(null, true);
         return;
