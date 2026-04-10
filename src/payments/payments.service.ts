@@ -8,7 +8,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
+import Stripe from 'stripe';
 import {
   Payment,
   PaymentMethod,
@@ -23,15 +24,22 @@ import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreatePaymentResponseDto } from './dto/create-payment-response.dto';
 import { PaymentStatusResponseDto } from './dto/payment-status-response.dto';
 
+interface StripeCheckoutSessionResponse {
+  id: string;
+  url: string | null;
+}
+
 interface WebhookPayload {
   type?: string;
   data?: {
     object?: {
       id?: string;
       status?: string;
+      payment_status?: string;
       metadata?: {
         paymentId?: string;
         orderId?: string;
+        userId?: string;
       };
     };
   };
@@ -93,10 +101,7 @@ export class PaymentsService {
       record.status = PaymentStatusEnum.PENDING;
       record.transactionId = null;
       record.providerEventId = null;
-      record.providerReference =
-        createPaymentDto.method === PaymentMethod.CREDIT_CARD
-          ? `pi_${randomUUID()}`
-          : null;
+      record.providerReference = null;
 
       return paymentRepository.save(record);
     });
@@ -106,9 +111,24 @@ export class PaymentsService {
       paymentId: payment.id,
     };
 
-    if (createPaymentDto.method === PaymentMethod.CREDIT_CARD) {
-      response.clientSecret = this.buildClientSecret(payment.id);
-      response.paymentUrl = this.buildPaymentUrl(payment.id);
+    if (
+      createPaymentDto.method !== PaymentMethod.COD &&
+      this.isStripeModeEnabled()
+    ) {
+      const stripeSession = await this.createStripeCheckoutSession(
+        payment,
+        order,
+        userId,
+      );
+
+      payment.providerReference = stripeSession.id;
+      await this.paymentRepository.save(payment);
+
+      if (!stripeSession.url || !stripeSession.url.startsWith('https://')) {
+        throw new BadRequestException('Stripe checkout URL is invalid');
+      }
+
+      response.paymentUrl = stripeSession.url;
     }
 
     this.logger.log(
@@ -140,10 +160,9 @@ export class PaymentsService {
     }
 
     return {
-      orderId: order.id,
-      paymentId: order.payment.id,
-      paymentStatus: order.payment.status,
+      paymentStatus: order.paymentStatus,
       method: order.payment.method,
+      status: order.payment.status,
     };
   }
 
@@ -156,7 +175,7 @@ export class PaymentsService {
       throw new BadRequestException('Missing payment signature');
     }
 
-    const payload = this.verifyWebhookSignature(rawBody, signature);
+    const payload = this.getVerifiedWebhookPayload(rawBody, signature);
     const eventType = payload.type;
     const providerObject = payload.data?.object;
     const paymentId = providerObject?.metadata?.paymentId;
@@ -170,14 +189,22 @@ export class PaymentsService {
     }
 
     const isSuccess =
+      eventType === 'checkout.session.completed' ||
       eventType === 'payment_intent.succeeded' ||
-      providerObject?.status === 'succeeded';
+      providerObject?.status === 'succeeded' ||
+      providerObject?.status === 'complete' ||
+      providerObject?.status === 'paid' ||
+      providerObject?.payment_status === 'paid';
     const isFailure =
+      eventType === 'checkout.session.async_payment_failed' ||
+      eventType === 'checkout.session.expired' ||
       eventType === 'payment_intent.payment_failed' ||
-      providerObject?.status === 'failed';
+      providerObject?.status === 'failed' ||
+      providerObject?.payment_status === 'unpaid';
 
     if (!isSuccess && !isFailure) {
-      throw new BadRequestException('Unsupported webhook event');
+      this.logger.log(`Webhook ignored eventType=${eventType}`);
+      return { received: true, ignored: true };
     }
 
     return this.dataSource.transaction(async (manager) => {
@@ -219,22 +246,140 @@ export class PaymentsService {
     });
   }
 
-  private buildPaymentUrl(paymentId: string) {
-    const appUrl = (process.env.APP_URL ?? 'http://localhost:3000').replace(
-      /\/$/,
-      '',
+  private isStripeModeEnabled() {
+    return (
+      (process.env.PAYMENT_PROVIDER ?? 'mock').toLowerCase() === 'stripe' &&
+      Boolean(process.env.STRIPE_SECRET_KEY)
     );
-
-    return `${appUrl}/payments/checkout/${paymentId}`;
   }
 
-  private buildClientSecret(paymentId: string) {
-    return `mock_secret_${this.sign(`${paymentId}:client_secret`)}`;
-  }
+  private getVerifiedWebhookPayload(rawBody: Buffer, signatureHeader: string) {
+    if (this.isStripeModeEnabled()) {
+      const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  private verifyWebhookSignature(rawBody: Buffer, signatureHeader: string) {
+      if (!secret) {
+        throw new BadRequestException('Missing STRIPE_WEBHOOK_SECRET');
+      }
+
+      try {
+        const stripe = this.getStripeClient();
+        const event = stripe.webhooks.constructEvent(
+          rawBody,
+          signatureHeader,
+          secret,
+        );
+
+        const objectData = event.data.object as unknown as Record<
+          string,
+          unknown
+        >;
+        const metadata =
+          (objectData.metadata as Record<string, string> | undefined) ?? {};
+
+        return {
+          type: event.type,
+          data: {
+            object: {
+              id: typeof objectData.id === 'string' ? objectData.id : undefined,
+              status:
+                typeof objectData.status === 'string'
+                  ? objectData.status
+                  : undefined,
+              payment_status:
+                typeof objectData.payment_status === 'string'
+                  ? objectData.payment_status
+                  : undefined,
+              metadata: {
+                paymentId: metadata.paymentId,
+                orderId: metadata.orderId,
+                userId: metadata.userId,
+              },
+            },
+          },
+        } as WebhookPayload;
+      } catch {
+        throw new BadRequestException('Invalid Stripe webhook signature');
+      }
+    }
+
     const secret = process.env.PAYMENT_WEBHOOK_SECRET ?? 'mock-payment-secret';
+    return this.verifyWebhookSignature(rawBody, signatureHeader, secret);
+  }
 
+  private async createStripeCheckoutSession(
+    payment: Payment,
+    order: Order,
+    userId: string,
+  ): Promise<StripeCheckoutSessionResponse> {
+    const stripe = this.getStripeClient();
+
+    const baseUrl = (process.env.FRONTEND_URL ?? process.env.APP_URL ?? '')
+      .split(',')[0]
+      ?.trim()
+      ?.replace(/\/$/, '');
+
+    if (!baseUrl || !baseUrl.startsWith('http')) {
+      throw new BadRequestException(
+        'Missing FRONTEND_URL/APP_URL for Stripe checkout redirects',
+      );
+    }
+
+    const amountInCents = Math.round(Number(order.totalAmount) * 100);
+    if (!Number.isFinite(amountInCents) || amountInCents <= 0) {
+      throw new BadRequestException('Invalid order total for payment');
+    }
+
+    const paymentMethodType: 'card' | 'paypal' =
+      payment.method === PaymentMethod.PAYPAL ? 'paypal' : 'card';
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      success_url: `${baseUrl}/payment/success?paymentId=${payment.id}`,
+      cancel_url: `${baseUrl}/payment/cancel?paymentId=${payment.id}`,
+      payment_method_types: [paymentMethodType],
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: amountInCents,
+            product_data: {
+              name: `Order ${order.id}`,
+            },
+          },
+        },
+      ],
+      metadata: {
+        paymentId: payment.id,
+        orderId: order.id,
+        userId,
+      },
+    });
+
+    return {
+      id: session.id,
+      url: session.url,
+    };
+  }
+
+  private getStripeClient() {
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    if (!secretKey) {
+      throw new BadRequestException('Missing STRIPE_SECRET_KEY');
+    }
+
+    return new Stripe(secretKey, {
+      appInfo: {
+        name: 'ecommerce-backend',
+      },
+    });
+  }
+
+  private verifyWebhookSignature(
+    rawBody: Buffer,
+    signatureHeader: string,
+    secret: string,
+  ) {
     const parts = signatureHeader
       .split(',')
       .reduce<Record<string, string>>((accumulator, part) => {
@@ -280,14 +425,6 @@ export class PaymentsService {
     } catch {
       throw new BadRequestException('Invalid webhook payload');
     }
-  }
-
-  private sign(value: string) {
-    const secret = process.env.PAYMENT_WEBHOOK_SECRET ?? 'mock-payment-secret';
-    return createHmac('sha256', secret)
-      .update(value)
-      .digest('hex')
-      .slice(0, 24);
   }
 }
 

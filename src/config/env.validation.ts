@@ -24,6 +24,16 @@ export const validateEnv = (config: EnvConfig): EnvConfig => {
 
   const missingKeys = requiredKeys.filter((key) => !config[key]);
 
+  const paymentProvider = (config.PAYMENT_PROVIDER ?? 'mock').toLowerCase();
+  if (paymentProvider === 'stripe') {
+    if (!config.STRIPE_SECRET_KEY) {
+      missingKeys.push('STRIPE_SECRET_KEY');
+    }
+    if (!config.STRIPE_WEBHOOK_SECRET) {
+      missingKeys.push('STRIPE_WEBHOOK_SECRET');
+    }
+  }
+
   if (missingKeys.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missingKeys.join(', ')}`,
